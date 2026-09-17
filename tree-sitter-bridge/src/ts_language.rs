@@ -1,7 +1,7 @@
 use strum_macros::EnumIter; // 0.17.1
 
-//noinspection ALL
-#[derive(uniffi::Enum, PartialEq, Debug, EnumIter, Copy, Clone)]
+#[boltffi::data]
+#[derive(PartialEq, Debug, EnumIter, Copy, Clone)]
 pub enum TSLang {
     ASM,
     CPP,
@@ -19,8 +19,7 @@ pub enum TSLang {
 
     GLSL,
     HLSL,
-    //WGSL,
-    //WGSLB,
+    SLANG,
 
     JS,
     TS,

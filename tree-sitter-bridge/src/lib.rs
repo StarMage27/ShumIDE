@@ -1,14 +1,11 @@
 mod unwrap_log_errors;
 mod ts_bridge_error;
 mod ts_language;
-use std::sync::{Arc, Mutex};
+use std::sync::Mutex;
 use tree_sitter::{InputEdit, Language, Parser, Tree};
 use crate::ts_bridge_error::TSBridgeError;
 use crate::ts_language::TSLang;
 
-uniffi::setup_scaffolding!();
-
-#[derive(uniffi::Object)]
 pub struct TSBridge {
     parser: Mutex<Parser>,
     previous_tree: Mutex<Option<Tree>>,
@@ -16,22 +13,19 @@ pub struct TSBridge {
     previous_highlights: Mutex<Vec<Highlight>>,
 }
 
-#[uniffi::export]
+#[boltffi::export]
 impl TSBridge {
-    #[uniffi::constructor]
-    fn new() -> Arc<Self> {
-        Arc::new(
-            TSBridge {
-                parser: Mutex::new(Parser::new()),
-                previous_tree: Mutex::new(None),
-                previous_string: Mutex::new(String::new()),
-                previous_highlights: Mutex::new(Vec::new()),
-            }
-        )
+    pub fn new() -> Self {
+        TSBridge {
+            parser: Mutex::new(Parser::new()),
+            previous_tree: Mutex::new(None),
+            previous_string: Mutex::new(String::new()),
+            previous_highlights: Mutex::new(Vec::new()),
+        }
     }
 
     /// Sets the language and returns vec of kinds as strings
-    async fn set_language(&self, lang: TSLang) -> Result<(), TSBridgeError> {
+    pub fn set_language(&self, lang: TSLang) -> Result<(), TSBridgeError> {
         let language: Language = match lang {
             TSLang::ASM     => { tree_sitter_asm       ::LANGUAGE                .into() }
             TSLang::CPP     => { tree_sitter_cpp       ::LANGUAGE                .into() }
@@ -49,6 +43,7 @@ impl TSBridge {
 
             TSLang::GLSL    => { tree_sitter_glsl      ::LANGUAGE_GLSL           .into() }
             TSLang::HLSL    => { tree_sitter_hlsl      ::LANGUAGE_HLSL           .into() }
+            TSLang::SLANG   => { tree_sitter_slang     ::LANGUAGE_SLANG          .into() }
 
             TSLang::JS      => { tree_sitter_javascript::LANGUAGE                .into() }
             TSLang::TS      => { tree_sitter_typescript::LANGUAGE_TYPESCRIPT     .into() }
@@ -63,7 +58,7 @@ impl TSBridge {
             TSLang::Swift   => { tree_sitter_swift     ::LANGUAGE                .into() }
             TSLang::Lua     => { tree_sitter_lua       ::LANGUAGE                .into() }
 
-            TSLang::Clojure => { tree_sitter_clojure   ::LANGUAGE                .into() }
+            TSLang::Clojure => { arborium_clojure    ::language()                .into() }
             TSLang::R       => { tree_sitter_r         ::LANGUAGE                .into() }
             TSLang::Elixir  => { tree_sitter_elixir    ::LANGUAGE                .into() }
             TSLang::OCaml   => { tree_sitter_ocaml     ::LANGUAGE_OCAML          .into() }
@@ -83,14 +78,13 @@ impl TSBridge {
             TSLang::SQL     => { tree_sitter_sequel    ::LANGUAGE                .into() }
         };
 
-        let mut parser = self.parser.lock()?;
-
-        parser.set_language(&language)?;
+        // self.parser.set_language(&language)?;
+        self.parser.lock()?.set_language(&language)?;
 
         Ok(())
     }
 
-    async fn get_kinds_for_selected_language(&self) -> Result<Vec<String>, TSBridgeError> {
+    pub fn get_kinds_for_selected_language(&self) -> Result<Vec<String>, TSBridgeError> {
         let parser = self.parser.lock()?;
         let language = parser.language();
         match language {
@@ -108,14 +102,12 @@ impl TSBridge {
                 Ok(table)
             },
             None => {
-                Err(TSBridgeError::LanguageError { error_message: "failed to get language".to_owned() })
+                Err(TSBridgeError::LanguageError)
             }
         }
-
     }
 
-
-    async fn set_initial_string(&self, source_string: &str) -> Result<(), TSBridgeError> {
+    pub fn set_initial_string(&self, source_string: &str) -> Result<(), TSBridgeError> {
         let mut previous_string = self.previous_string.lock()?;
         previous_string.clear();
         previous_string.push_str(source_string);
@@ -123,17 +115,18 @@ impl TSBridge {
         Ok(())
     }
 
-    async fn get_previous_parse(&self) -> Result<Vec<Highlight>, TSBridgeError> {
+    pub fn get_previous_parse(&self) -> Result<Vec<Highlight>, TSBridgeError> {
         let previous_highlights = self.previous_highlights.lock()?;
         let highlights: Vec<Highlight> = previous_highlights.clone();
 
         Ok(highlights)
     }
 
-    async fn parse_everything(&self, source_string: &str) -> Result<Vec<Highlight>, TSBridgeError> {
+    pub fn parse_everything(&self, source_string: &str) -> Result<Vec<Highlight>, TSBridgeError> {
         let mut parser = self.parser.lock()?;
-        let mut previous_tree = self.previous_tree.lock()?;
         let mut previous_string = self.previous_string.lock()?;
+        let mut previous_tree = self.previous_tree.lock()?;
+
         previous_string.clear();
         previous_string.push_str(source_string);
 
@@ -142,7 +135,7 @@ impl TSBridge {
         match tree {
             Some(tree) => {
                 let highlights = climb(&tree);
-                previous_tree.replace(tree.clone());
+                previous_tree.replace(tree);
 
                 Ok(highlights)
             }
@@ -152,7 +145,7 @@ impl TSBridge {
         }
     }
 
-    async fn parse_changes(&self, changed_part: &str, diff_range: DiffRange) -> Result<Vec<Highlight>, TSBridgeError> {
+    pub fn parse_changes(&self, changed_part: &str, diff_range: DiffRange) -> Result<Vec<Highlight>, TSBridgeError> {
         let mut parser = self.parser.lock()?;
         let mut previous_tree = self.previous_tree.lock()?;
         let mut previous_string = self.previous_string.lock()?;
@@ -188,31 +181,24 @@ impl TSBridge {
     }
 }
 
-#[derive(uniffi::Record, Default)]
-struct Highlight {
-    pub start: i32,
-    pub end: i32,
+#[allow(proc_macro_derive_resolution_fallback)]
+#[boltffi::data]
+#[derive(Clone, Copy)]
+pub struct Highlight {
+    pub start: u64,
+    pub end: u64,
     pub kind: u16,
 }
 
-impl Clone for Highlight {
-    fn clone(&self) -> Self {
-        Highlight {
-            start: self.start,
-            end: self.end,
-            kind: self.kind,
-        }
-    }
+#[boltffi::data]
+#[derive(Clone, Copy)]
+pub struct DiffRange {
+    pub start: u64,
+    pub old_end: u64,
+    pub new_end: u64,
 }
 
-#[derive(uniffi::Record, Default)]
-struct DiffRange {
-    pub start: i32,
-    pub old_end: i32,
-    pub new_end: i32,
-}
-
-fn climb(tree: &Tree) -> Vec<Highlight> {
+pub fn climb(tree: &Tree) -> Vec<Highlight> {
     let root = tree.root_node();
 
     let mut highlights: Vec<Highlight> = Vec::new();
@@ -220,8 +206,8 @@ fn climb(tree: &Tree) -> Vec<Highlight> {
     let mut stack = vec![root];
     while let Some(node) = stack.pop() {
         highlights.push(Highlight{
-            start: node.start_byte() as i32,
-            end: node.end_byte() as i32,
+            start: node.start_byte() as u64,
+            end: node.end_byte() as u64,
             kind: node.kind_id()
         });
 
@@ -237,7 +223,8 @@ fn climb(tree: &Tree) -> Vec<Highlight> {
 
 #[cfg(test)]
 mod tests {
-    use strum::IntoEnumIterator;
+
+use strum::IntoEnumIterator;
     use crate::TSLang;
 use crate::TSBridge;
     #[test]
@@ -245,12 +232,10 @@ use crate::TSBridge;
         let bridge = TSBridge::new();
 
         for lang in TSLang::iter() {
-            async_std::task::block_on(async {
-                match bridge.set_language(lang).await {
-                    Ok(_) => println!("Passed: {:?}" , lang),
-                    Err(e) => panic!("Failed: {:?}. Error: {:?}", lang, e),
-                }
-            });
+            match bridge.set_language(lang) {
+                Ok(_) => println!("Passed: {:?}" , lang),
+                Err(e) => panic!("Failed: {:?}. Error: {:?}", lang, e),
+            }
         }
     }
 }
