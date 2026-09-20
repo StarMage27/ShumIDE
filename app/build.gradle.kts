@@ -6,8 +6,9 @@ plugins {
 
 android {
     namespace = "starmage27.shumide"
-    compileSdk = 37
-    ndkVersion = "29.0.14206865"
+    compileSdk {
+        version = release(37)
+    }
 //    sourceSets {
 //        getByName("main").java.srcDir("build/generated/kotlin")
 //    }

@@ -1,4 +1,3 @@
-mod unwrap_log_errors;
 mod ts_bridge_error;
 mod ts_language;
 use std::sync::Mutex;
@@ -58,7 +57,7 @@ impl TSBridge {
             TSLang::Swift   => { tree_sitter_swift     ::LANGUAGE                .into() }
             TSLang::Lua     => { tree_sitter_lua       ::LANGUAGE                .into() }
 
-            TSLang::Clojure => { arborium_clojure    ::language()                .into() }
+            TSLang::Clojure => { arborium_clojure      ::language()              .into() }
             TSLang::R       => { tree_sitter_r         ::LANGUAGE                .into() }
             TSLang::Elixir  => { tree_sitter_elixir    ::LANGUAGE                .into() }
             TSLang::OCaml   => { tree_sitter_ocaml     ::LANGUAGE_OCAML          .into() }
